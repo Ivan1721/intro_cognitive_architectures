@@ -7,19 +7,27 @@ from yolo_msgs.msg import DetectionArray
 from std_msgs.msg import String
 
 
-# Maximum distance (in meters) for a detection to be added to the ontology
-MAX_DETECTION_DISTANCE = 3.0
+# Maximum distance (in meters) for a detection to be added to the ontology.
+# El venue real (aula/cafetería) es más grande que el simulador -> ampliado.
+MAX_DETECTION_DISTANCE = 5.0
 
-# Mapping from YOLO class names to ontology class names
+# Mapeo nombre-de-clase-YOLO -> clase-OWL.
+# Las cadenas de la izquierda son EXACTAS a las que emite el modelo cargado
+# (yolov8m.pt, COCO-80) — verificado contra model.names, no asumido.
 LABEL_TO_ONTOLOGY = {
-    "sofa":         "Sofa",
-    "bed":          "Bed",
-    "chair":        "Chair",
+    # --- Evidencia de aula (Classroom) ---
+    "laptop":       "Laptop",
+    "backpack":     "Backpack",
+    "keyboard":     "Keyboard",
+    "book":         "Book",
+    "tv":           "Screen",        # proyector / pantalla
+    # --- Evidencia de cafetería/comedor (Casino) ---
     "dining table": "DiningTable",
-    "tv":           "TV",
     "cup":          "Cup",
-    "refrigerator": "Fridge",
-    "oven":         "Oven",
+    "bottle":       "Bottle",
+    "bowl":         "Bowl",
+    # --- Compartido (no discrimina por sí solo) ---
+    "chair":        "Chair",
 }
 
 
@@ -57,8 +65,12 @@ class SymbolicNode(Node):
         executes one symbolic reasoning cycle.
         """
 
-        # Forget previous observations
+        # Olvidar las observaciones del frame anterior Y su clasificación:
+        # sync_reasoner ACUMULA is_a entre llamadas, así que sin este reset una
+        # zona inferida una vez se queda "pegada" para siempre y rompe las
+        # transiciones (Classroom -> Casino). Reiniciamos el individuo a Room.
         self.room.contains.clear()
+        self.room.is_a = [self.Room]
 
         any_valid = False
 
@@ -142,12 +154,19 @@ class SymbolicNode(Node):
             c.name for c in classes
             if hasattr(c, "name")
             and c in (
-                self.onto.LivingRoom,
-                self.onto.Bedroom,
-                self.onto.Kitchen,
-                self.onto.DiningRoom,
+                self.onto.Casino,
+                self.onto.Classroom,
             )
         ]
+
+        # Ninguna zona inferida -> no publicamos nada. El estado "None" lo
+        # resuelve el goal_manager cuando ninguna creencia supera el umbral;
+        # publicar "None" aquí contaminaría las creencias (no es una zona).
+        if not inferred_rooms:
+            self.get_logger().info(
+                "No zone recognized yet (insufficient evidence)"
+            )
+            return
 
         for room in inferred_rooms:
 
@@ -157,13 +176,7 @@ class SymbolicNode(Node):
             self.publisher.publish(msg)
 
             self.get_logger().info(
-                f"Published room hypotheses: {room}"
-            )
-
-        else:
-
-            self.get_logger().warn(
-                "Unable to infer the current room."
+                f"Published zone hypothesis: {room}"
             )
 
 

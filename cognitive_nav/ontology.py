@@ -1,11 +1,23 @@
 from owlready2 import *
 
-def load_ontology():
 
-    onto = get_ontology("http://cognitive-nav.org/ontology.owl")
+def load_ontology():
+    """
+    Ontología para un venue real tipo escuela/oficina.
+
+    Dos zonas objetivo: Casino (comedor/cafetería) y Classroom (aula).
+    La clasificación de una zona exige combinaciones de AL MENOS 2 objetos
+    para evitar ambigüedad: una silla (chair) aparece en ambas zonas, así que
+    nunca decide por sí sola. Los discriminadores son objetos de estudio
+    (laptop/backpack/keyboard/book) para el aula, y de comida/bebida
+    (dining table/cup/bottle/bowl) para la cafetería.
+    """
+    onto = get_ontology("http://cognitive-nav.org/venue.owl")
 
     with onto:
-        # Core concepts
+        # ------------------------------------------------------------------
+        # Conceptos base
+        # ------------------------------------------------------------------
         class Room(Thing):
             pass
 
@@ -16,66 +28,75 @@ def load_ontology():
             domain = [Room]
             range = [PhysicalObject]
 
-        # Objects
-        class Sofa(PhysicalObject):
+        # ------------------------------------------------------------------
+        # Objetos (evidencia). Cada uno se corresponde con una clase YOLO/COCO
+        # (ver LABEL_TO_ONTOLOGY en symbolic_node.py).
+        # ------------------------------------------------------------------
+        # Compartido (NO discrimina por sí solo)
+        class Chair(PhysicalObject):        # YOLO: "chair"
             pass
 
-        class TV(PhysicalObject):
+        # Evidencia de aula (Classroom)
+        class Laptop(PhysicalObject):       # YOLO: "laptop"
             pass
 
-        class Bed(PhysicalObject):
+        class Backpack(PhysicalObject):     # YOLO: "backpack"
             pass
 
-        class Chair(PhysicalObject):
+        class Keyboard(PhysicalObject):     # YOLO: "keyboard"
             pass
 
-        class DiningTable(PhysicalObject):
+        class Book(PhysicalObject):         # YOLO: "book"
             pass
 
-        class Fridge(PhysicalObject):
+        class Screen(PhysicalObject):       # YOLO: "tv" (proyector / pantalla)
             pass
 
-        class Cup(PhysicalObject):
+        # Evidencia de cafetería/comedor (Casino)
+        class DiningTable(PhysicalObject):  # YOLO: "dining table"
             pass
 
-        class Oven(PhysicalObject):
+        class Cup(PhysicalObject):          # YOLO: "cup"
             pass
 
-        # Rooms
-        class LivingRoom(Room):
+        class Bottle(PhysicalObject):       # YOLO: "bottle"
             pass
 
-        class Bedroom(Room):
+        class Bowl(PhysicalObject):         # YOLO: "bowl"
             pass
 
-        class Kitchen(Room):
+        # ------------------------------------------------------------------
+        # Zonas
+        # ------------------------------------------------------------------
+        class Casino(Room):
             pass
 
-        class DiningRoom(Room):
+        class Classroom(Room):
             pass
 
+        # ------------------------------------------------------------------
+        # Reglas de clasificación (equivalent_to).
+        # Cada alternativa exige >=2 objetos; "chair" solo se usa como
+        # confirmador junto a un discriminador de aula.
+        # ------------------------------------------------------------------
+        Classroom.equivalent_to.append(
+            Room & (
+                (contains.some(Laptop) & contains.some(Chair)) |
+                (contains.some(Laptop) & contains.some(Screen)) |
+                (contains.some(Backpack) & contains.some(Chair)) |
+                (contains.some(Keyboard) & contains.some(Chair)) |
+                (contains.some(Book) & contains.some(Backpack))
+            )
+        )
 
-        # Classification rules
-
-        # TODO:
-        # Add OWL equivalence rules that allow the reasoner
-        # to infer the room type from the observed objects.
-
-        # Example:
-        # LivingRoom.equivalent_to.append(
-        #     Room
-        #     & contains.some(Sofa)
-        # )
-
-        # Example rule:
-
-        # Bedroom.equivalent_to.append(
-        #     Room
-        #     & contains.some(Bed)
-        # )
-
-        # Try to make your rules specific enough to avoid
-        # confusing one room with another.
-
+        Casino.equivalent_to.append(
+            Room & (
+                (contains.some(DiningTable) & contains.some(Cup)) |
+                (contains.some(DiningTable) & contains.some(Bottle)) |
+                (contains.some(DiningTable) & contains.some(Bowl)) |
+                (contains.some(Cup) & contains.some(Bottle)) |
+                (contains.some(Bowl) & contains.some(Cup))
+            )
+        )
 
     return onto

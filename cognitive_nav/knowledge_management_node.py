@@ -4,7 +4,11 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
-DECAY = 0.8
+# Recalibrado para entorno real (YOLO más ruidoso que en el simulador):
+# mayor retención temporal suaviza detecciones intermitentes por oclusión/
+# iluminación/ángulo. Steady-state de una zona vista de forma constante:
+# 1/(1-DECAY) = 10.0.  (Simulador: 0.8 -> steady-state 5.0)
+DECAY = 0.9
 
 
 class KnowledgeManagementNode(Node):
@@ -13,11 +17,12 @@ class KnowledgeManagementNode(Node):
         super().__init__("knowledge_management_node")
 
         # Belief state
+        # Solo las dos zonas del venue. "None" NO es una key: es el estado
+        # por defecto que deduce el goal_manager cuando ninguna creencia
+        # supera el umbral, no una hipótesis con creencia acumulada.
         self.room_beliefs = {
-            "LivingRoom": 0.0,
-            "Bedroom": 0.0,
-            "Kitchen": 0.0,
-            "DiningRoom": 0.0,
+            "Casino": 0.0,
+            "Classroom": 0.0,
         }
 
         # Subscribe to symbolic room inference
@@ -55,37 +60,34 @@ class KnowledgeManagementNode(Node):
     def update_beliefs(self, inferred_room):
         """
         Increase the belief associated with the inferred room.
-
         Example:
-
             LivingRoom += 1
         """
-
-        # TODO
-        pass
+        if inferred_room in self.room_beliefs:
+            self.room_beliefs[inferred_room] += 1.0
+        else:
+            self.get_logger().warn(
+                f"Received unknown room category: '{inferred_room}'"
+            )
 
     def apply_decay(self):
         """
         Apply memory decay to every room belief.
-
         Example:
-
             belief *= DECAY
         """
-
-        # TODO
-        pass
+        for room in self.room_beliefs:
+            self.room_beliefs[room] *= DECAY
 
     def publish_beliefs(self):
         """
         Publish the complete belief state as a JSON string.
-
         Hint:
             Use json.dumps().
         """
-
-        # TODO
-        pass
+        msg = String()
+        msg.data = json.dumps(self.room_beliefs)
+        self.publisher.publish(msg)
 
 
     def print_beliefs(self):
